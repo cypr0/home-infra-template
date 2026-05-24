@@ -1,0 +1,134 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+    "docker:enableMajor",
+    ":automergeBranch",
+    ":dependencyDashboard",
+    ":disableRateLimiting",
+    ":semanticCommits",
+  ],
+  dependencyDashboard: true,
+  dependencyDashboardTitle: "Renovate Dashboard :robot:",
+  schedule: ["every day"],
+  ignorePaths: ["**/*.sops.*", ".env"],
+  kubernetes: {
+    managerFilePatterns: [
+      "/(^|/)bootstrap/.+\\.ya?ml$/",
+      "/(^|/)DMZ/.+\\.ya?ml$/",
+      "/(^|/)Internal/.+\\.ya?ml$/",
+    ],
+  },
+  packageRules: [
+    {
+      description: "Auto-merge minor and patch updates",
+      matchDatasources: ["docker", "helm", "github-releases"],
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      automerge: true,
+      automergeType: "branch",
+      minimumReleaseAge: "1 day",
+    },
+    {
+      description: "Require approval for major updates",
+      matchUpdateTypes: ["major"],
+      automerge: false,
+      dependencyDashboardApproval: true,
+    },
+    {
+      description: "Group Talos and Kubernetes versions — must stay compatible",
+      groupName: "talos-kubernetes",
+      matchPackageNames: [
+        "siderolabs/talos",
+        "ghcr.io/siderolabs/kubelet",
+      ],
+    },
+    {
+      matchUpdateTypes: ["major"],
+      semanticCommitType: "feat",
+      commitMessagePrefix: "{{semanticCommitType}}({{semanticCommitScope}})!:",
+      commitMessageExtra: "( {{currentVersion}} ➔ {{newVersion}} )",
+    },
+    {
+      matchUpdateTypes: ["minor"],
+      semanticCommitType: "feat",
+      commitMessageExtra: "( {{currentVersion}} ➔ {{newVersion}} )",
+    },
+    {
+      matchUpdateTypes: ["patch"],
+      semanticCommitType: "fix",
+      commitMessageExtra: "( {{currentVersion}} ➔ {{newVersion}} )",
+    },
+    {
+      matchUpdateTypes: ["digest"],
+      semanticCommitType: "chore",
+      commitMessageExtra: "( {{currentDigestShort}} ➔ {{newDigestShort}} )",
+    },
+    {
+      matchDatasources: ["docker"],
+      semanticCommitScope: "container",
+      commitMessageTopic: "image {{depName}}",
+    },
+    {
+      matchDatasources: ["github-releases"],
+      semanticCommitScope: "github-release",
+      commitMessageTopic: "release {{depName}}",
+    },
+    {
+      matchUpdateTypes: ["major"],
+      labels: ["type/major"],
+    },
+    {
+      matchUpdateTypes: ["minor"],
+      labels: ["type/minor"],
+    },
+    {
+      matchUpdateTypes: ["patch"],
+      labels: ["type/patch"],
+    },
+    {
+      matchUpdateTypes: ["digest"],
+      labels: ["type/digest"],
+    },
+    {
+      matchDatasources: ["docker"],
+      addLabels: ["renovate/container"],
+    },
+    {
+      matchDatasources: ["github-releases"],
+      addLabels: ["renovate/github-release"],
+    },
+  ],
+  customManagers: [
+    {
+      customType: "regex",
+      description: "Process annotated version variables and provider URLs",
+      managerFilePatterns: [
+        "/(^|/).+\\.env(?:\\.template)?(?:\\.j2)?$/",
+        "/(^|/).+\\.sh(?:\\.j2)?$/",
+        "/(^|/).+\\.ya?ml(?:\\.j2)?$/",
+      ],
+      matchStrings: [
+        // # renovate: datasource=github-releases depName=siderolabs/talos
+        // TALOS_VERSION=v1.13.0
+        "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( repository=(?<registryUrl>\\S+))?\\n.+(:\\s|=)(&\\S+\\s)?(?<currentValue>v\\d[^\\s]*)",
+        // # renovate: datasource=github-releases depName=siderolabs/cluster-api-bootstrap-provider-talos
+        //     url: "https://github.com/.../releases/v0.6.11/bootstrap-components.yaml"
+        "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n.+/(?<currentValue>(v|\\d)[^/]+)",
+      ],
+      datasourceTemplate: "{{#if datasource}}{{{datasource}}}{{else}}github-releases{{/if}}",
+    },
+    {
+      customType: "regex",
+      description: "Process full image reference variables (registry/image:tag)",
+      managerFilePatterns: [
+        "/(^|/).+\\.env(?:\\.template)?(?:\\.j2)?$/",
+      ],
+      matchStrings: [
+        // # renovate: datasource=docker depName=registry.k8s.io/autoscaling/cluster-autoscaler
+        // AUTOSCALER_IMAGE=registry.k8s.io/autoscaling/cluster-autoscaler:v1.35.0
+        "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\S+=[^:]+:(?<currentValue>v[^\\s]+)",
+      ],
+      datasourceTemplate: "{{#if datasource}}{{{datasource}}}{{else}}docker{{/if}}",
+    },
+  ],
+}

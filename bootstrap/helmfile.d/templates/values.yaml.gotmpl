@@ -1,0 +1,73 @@
+{{- if eq .Release.Name "coredns" }}
+---
+# CoreDNS configuration
+service:
+  name: kube-dns
+  clusterIP: 10.96.0.10
+servers:
+  - zones:
+      - zone: .
+    port: 53
+    plugins:
+      - name: errors
+      - name: health
+        configBlock: |-
+          lameduck 5s
+      - name: ready
+      - name: kubernetes
+        parameters: cluster.local in-addr.arpa ip6.arpa
+        configBlock: |-
+          pods insecure
+          fallthrough in-addr.arpa ip6.arpa
+          ttl 30
+      - name: prometheus
+        parameters: 0.0.0.0:9153
+      - name: forward
+        parameters: . /etc/resolv.conf
+      - name: cache
+        parameters: 30
+      - name: loop
+      - name: reload
+      - name: loadbalance
+{{- end }}
+
+{{- if eq .Release.Name "spegel" }}
+---
+# Spegel configuration (local registry mirror)
+spegel:
+  registries:
+    - https://ghcr.io
+    - https://registry.k8s.io
+    - https://quay.io
+    - https://docker.io
+{{- end }}
+
+{{- if eq .Release.Name "cert-manager" }}
+---
+# cert-manager configuration
+crds:
+  enabled: true
+global:
+  leaderElection:
+    namespace: cert-manager
+{{- end }}
+
+{{- if eq .Release.Name "flux-operator" }}
+---
+# Flux Operator configuration
+operator:
+  create: true
+{{- end }}
+
+{{- if eq .Release.Name "flux-instance" }}
+---
+# Flux Instance configuration
+instance:
+  sync:
+    kind: GitRepository
+    url: "{{ env "FLUX_REPO_URL" | default "https://github.com/your-user/home-ops" }}"
+    ref: "{{ env "FLUX_REPO_BRANCH" | default "main" }}"
+    path: "{{ env "FLUX_REPO_PATH" | default "kubernetes/flux" }}"
+  kustomize:
+    path: "{{ env "FLUX_KUSTOMIZE_PATH" | default "./kubernetes/flux" }}"
+{{- end }}

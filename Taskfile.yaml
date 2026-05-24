@@ -1,0 +1,158 @@
+# https://taskfile.dev
+version: '3'
+
+dotenv: ['.env']
+
+vars:
+  REPO_ROOT:
+    sh: pwd
+  KUBECONFIG_MGMT:
+    sh: python3 -c "import os; print(os.path.expanduser(os.environ.get('KUBECONFIG_OUT', '~/.kube/home-infra')))"
+  # Resolved context name: use 'home-mgmt' if kubeconfig-merge has run, else fall back to the raw mgmt context
+  MGMT_CONTEXT:
+    sh: |
+      kc=$(python3 -c "import os; print(os.path.expanduser(os.environ.get('KUBECONFIG_OUT', '~/.kube/home-infra')))")
+      if kubectl --kubeconfig "$kc" config get-contexts home-mgmt >/dev/null 2>&1; then
+        echo home-mgmt
+      else
+        kubectl --kubeconfig "$HOME/.kube/config" config current-context
+      fi
+  MGMT_KUBECONFIG:
+    sh: |
+      kc=$(python3 -c "import os; print(os.path.expanduser(os.environ.get('KUBECONFIG_OUT', '~/.kube/home-infra')))")
+      if kubectl --kubeconfig "$kc" config get-contexts home-mgmt >/dev/null 2>&1; then
+        echo "$kc"
+      else
+        echo "$HOME/.kube/config"
+      fi
+
+tasks:
+
+  default:
+    desc: "List available tasks"
+    cmds:
+      - task --list
+
+  # ─── End-to-End ────────────────────────────────────────────────────────────
+  up:
+    desc: "Full setup: Mgmt + CAPI + home-cluster + Addons + Kubeconfig (idempotent)"
+    cmds:
+      - task: preflight
+      - task: opnsense:fw
+      - task: opnsense:verify
+      - task: proxmox:ip
+      - task: mgmt:bootstrap
+      - task: clusters:up
+      - task: addons:install
+      - task: kubeconfig:merge
+      - echo ""
+      - echo "✅  home-infra is ready. Kubeconfig → $KUBECONFIG_OUT"
+
+  # ─── Preparation ───────────────────────────────────────────────────────────
+  preflight:
+    desc: "Check tools, .env, Proxmox and OPNsense API reachability"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/preflight.sh"
+
+  proxmox:ip:
+    desc: "Set 192.168.10.254/24 on vmbr1 (Proxmox mgmt IP for CAPMOX)"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/configure-proxmox-mgmt-ip.sh"
+
+  proxmox:ip:dry:
+    desc: "Dry run for proxmox:ip"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/configure-proxmox-mgmt-ip.sh --dry-run"
+
+  # ─── OPNsense ──────────────────────────────────────────────────────────────
+  opnsense:fw:
+    desc: "Configure firewall rules (aliases + pass rules) on OPNsense"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/configure-opnsense-firewall.sh"
+
+  opnsense:fw:dry:
+    desc: "Dry run for opnsense:fw"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/configure-opnsense-firewall.sh --dry-run"
+
+  opnsense:verify:
+    desc: "Verify that ntpd + unbound are running on OPNsense"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/verify-opnsense-services.sh"
+
+  # ─── Management cluster ─────────────────────────────────────────────────────
+  mgmt:bootstrap:
+    desc: "Clone mgmt VM, provision Talos, install Cilium + CAPI (idempotent)"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/bootstrap-mgmt.sh"
+
+  mgmt:capi:
+    desc: "Run clusterctl init only (skips VM/Talos/CNI)"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/bootstrap-mgmt.sh --skip-vm --skip-talos --skip-cni"
+
+  # ─── Workload cluster ───────────────────────────────────────────────────────
+  clusters:up:
+    desc: "Create home-cluster and wait for Provisioned"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/clusters-up.sh"
+
+  clusters:status:
+    desc: "Current status of all CAPI resources"
+    cmds:
+      - kubectl --kubeconfig "{{.MGMT_KUBECONFIG}}" --context {{.MGMT_CONTEXT}} get cluster,taloscontrolplane,machinedeployment,machine -A
+
+  # ─── Addons ────────────────────────────────────────────────────────────────
+  addons:install:
+    desc: "Cilium + ProviderID-Patcher + Taint-Remover + Autoscaler for home-cluster"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/install-addons.sh"
+
+  # ─── Upgrades ──────────────────────────────────────────────────────────────
+  talos:upgrade:
+    desc: "Rolling Talos upgrade for home-cluster — control planes first, then workers"
+    prompt: "This reboots nodes one at a time. Really proceed?"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/talos-upgrade.sh home"
+
+  talos:upgrade:mgmt:
+    desc: "Rolling Talos upgrade for management cluster (single node — API unavailable during reboot)"
+    prompt: "This reboots the management node. The management API is unavailable during reboot. Really proceed?"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/talos-upgrade.sh mgmt"
+
+  k8s:upgrade:
+    desc: "Kubernetes version upgrade for home-cluster via talosctl upgrade-k8s"
+    prompt: "Really upgrade Kubernetes to the version in .env for home-cluster?"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/k8s-upgrade.sh home"
+
+  k8s:upgrade:mgmt:
+    desc: "Kubernetes version upgrade for management cluster"
+    prompt: "Really upgrade Kubernetes to the version configured in .env for the management cluster?"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/k8s-upgrade.sh mgmt"
+
+  # ─── Kubeconfig ────────────────────────────────────────────────────────────
+  kubeconfig:merge:
+    desc: "Merge mgmt + home-cluster into one file (contexts: home-mgmt, home-cluster)"
+    cmds:
+      - "{{.REPO_ROOT}}/scripts/kubeconfig-merge.sh"
+
+  # ─── Reset / Down (destructive) ────────────────────────────────────────────
+  down:clusters:
+    desc: "Delete home-cluster — VMs are decommissioned via CAPI"
+    prompt: "Really delete home-cluster?"
+    cmds:
+      - kubectl --kubeconfig "{{.MGMT_KUBECONFIG}}" --context {{.MGMT_CONTEXT}} delete cluster home-cluster --ignore-not-found
+      - echo "Cluster deletion initiated. CAPI will decommission the VMs."
+
+  down:mgmt:
+    desc: "Stop + delete mgmt VM in Proxmox (full reset)"
+    prompt: "Really delete the mgmt VM ($MGMT_VMID) in Proxmox?"
+    cmds:
+      - |
+        ssh -o StrictHostKeyChecking=no root@${PROXMOX_PUBLIC_IP} \
+          "qm stop ${MGMT_VMID} 2>/dev/null; qm destroy ${MGMT_VMID} --purge"
+      - rm -rf "${HOME}/.config/home-infra/mgmt"
+      - echo "Mgmt VM deleted. Local talosconfigs removed."

@@ -1,0 +1,18 @@
+# https://mirkolenz.github.io/makejinja
+[context]
+plugin = "template/scripts/plugin.py"
+data = "cluster.toml"
+
+[jinja]
+syntax.block_start = "#%"
+syntax.block_end = "%#"
+syntax.variable_start = "#{"
+syntax.variable_end = "}#"
+syntax.comment_start = "##"
+syntax.comment_end = "##"
+suffix = ".j2"
+
+[[tasks]]
+input = "template/config"
+output = "."
+exclude_patterns = ["**/README.md", ".DS_Store"]

@@ -1,0 +1,33 @@
+---
+# This helmfile extracts CRDs from Helm charts and applies them before app installation.
+# Usage: helmfile -f 00-crds.yaml template | kubectl apply -f -
+
+helmDefaults:
+  args:
+    - --include-crds
+    - --no-hooks
+
+releases:
+  # External DNS (Cloudflare)
+  - name: cloudflare-dns
+    namespace: network
+    chart: oci://ghcr.io/home-operations/charts-mirror/external-dns
+    version: 1.20.0
+
+  # Envoy Gateway
+  - name: envoy-gateway
+    namespace: network
+    chart: oci://mirror.gcr.io/envoyproxy/gateway-helm
+    version: v1.7.0
+
+  # Prometheus Stack
+  - name: kube-prometheus-stack
+    namespace: observability
+    chart: oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
+    version: 82.2.0
+
+  # CloudNativePG Operator
+  - name: cnpg-operator
+    namespace: database
+    chart: oci://ghcr.io/cloudnative-pg/charts/cloudnative-pg
+    version: 0.23.0

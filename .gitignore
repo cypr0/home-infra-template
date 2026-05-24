@@ -1,0 +1,92 @@
+# Ignore all .env files at any depth
+.env
+**/.env
+
+# =========================
+#        Kubernetes
+# =========================
+
+# Local kube configs
+.kube/
+kubeconfig
+kubeconfig.*
+*-kubeconfig
+**/*-kubeconfig
+**/kubeconfig
+
+# proxmox-cloud-controller
+config.yaml
+**/config.yaml
+
+# Talos
+talosconfig
+**/talosconfig
+*-talosconfig
+**/*-talosconfig
+admin.crt
+**/admin.crt
+admin.key
+**/admin.key
+admin.csr
+**/admin.csr
+ca.crt
+**/ca.crt
+ca.key
+**/ca.key
+controlplane.yaml
+**/controlplane.yaml
+worker.yaml
+**/worker.yaml
+
+# Helm
+.helm/
+charts/*.tgz
+Chart.lock
+helmfile.lock
+
+# Kustomize
+kustomize/
+**/kustomization.local.yaml
+
+# Generated manifests
+*.rendered.yaml
+*.generated.yaml
+dist/
+build/
+
+# Secrets
+*.secret.yaml
+*.secrets.yaml
+secrets.yaml
+secrets/
+.env
+.env.*
+
+# Logs
+*.log
+logs/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+
+# Node (if charts/apps use JS tooling)
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Temporary files
+*.tmp
+*.bak
+
+# Temporary folders
+temp

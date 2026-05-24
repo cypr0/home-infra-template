@@ -1,0 +1,32 @@
+# https://mise.jdx.dev/configuration.html
+[tools]
+just = "latest"
+kubectl = "1.32"
+helm = "3.16"
+helmfile = "0.169"
+sops = "3.9"
+age = "1.2"
+flux = "2.4"
+yq = "4.44"
+jq = "1.7"
+python = "3.12"
+# Install cue manually: https://cuelang.org/docs/install/
+# Install talosctl manually: https://www.talos.dev/latest/introduction/getting-started/#talosctl
+# Install clusterctl manually: https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.install-python-deps]
+description = "Install Python dependencies for makejinja"
+run = "pip install makejinja"
+
+[tasks.install-gum]
+description = "Install gum (https://github.com/charmbracelet/gum)"
+run = """
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  brew install gum
+else
+  echo "Install gum manually: https://github.com/charmbracelet/gum#installation"
+fi
+"""
