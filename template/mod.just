@@ -114,7 +114,19 @@ render:
     test -f "{{ schema_file }}"
     test -f "{{ template_dir }}/scripts/plugin.py"
     test -f "{{ makejinja_config }}"
-    PYTHONDONTWRITEBYTECODE=1 makejinja --input "{{ template_dir }}/config" --output "{{ justfile_dir() }}"
+    cd "{{ justfile_dir() }}" && PYTHONDONTWRITEBYTECODE=1 makejinja \
+        --input "{{ template_dir }}/config" \
+        --output "." \
+        --jinja-suffix ".j2" \
+        --force \
+        --data "{{ config_file }}" \
+        --plugin "{{ template_dir }}/scripts/plugin.py" \
+        --block-start "#%" \
+        --block-end "%#" \
+        --variable-start "#{" \
+        --variable-end "}#" \
+        --comment-start "##" \
+        --comment-end "##"
 
 [private]
 [script]
