@@ -29,7 +29,14 @@ This repo provisions a **Kubernetes cluster** on Proxmox VE:
 ### Prerequisites
 
 ```bash
-brew install talosctl clusterctl kubectl just age cue pipx
+# Install tools via mise (recommended)
+curl https://mise.run | sh
+mise install
+mise run install-python-deps
+mise run install-gum
+
+# OR install manually
+brew install talosctl clusterctl kubectl just age cue gum
 pipx install makejinja
 ```
 
@@ -40,14 +47,17 @@ pipx install makejinja
 git clone https://github.com/your-username/home-infra.git
 cd home-infra
 
-# 2. Create configuration
+# 2. Install dependencies
+mise install
+
+# 3. Create configuration
 cp cluster.sample.toml cluster.toml
 $EDITOR cluster.toml  # Fill in your details
 
-# 3. Initialize secrets
+# 4. Initialize secrets (creates age key, deploy key, push token)
 just template init
 
-# 4. Deploy everything
+# 5. Deploy everything
 just up
 ```
 

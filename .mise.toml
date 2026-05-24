@@ -6,7 +6,7 @@ helm = "3.16"
 helmfile = "0.169"
 sops = "3.9"
 age = "1.2"
-flux = "2.4"
+flux2 = "2.4"
 yq = "4.44"
 jq = "1.7"
 python = "3.12"
@@ -16,6 +16,7 @@ python = "3.12"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
+SOPS_AGE_KEY_FILE = "~/.config/sops/age.key"
 
 [tasks.install-python-deps]
 description = "Install Python dependencies for makejinja"
