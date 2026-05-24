@@ -35,7 +35,6 @@ doctor:
     rc=0
     just template doctor-check "cluster.toml"           "{{ config_file }}"           || rc=1
     just template doctor-check "cluster.sample.toml"    "{{ sample_config_file }}"    || rc=1
-    just template doctor-check "cloudflare-tunnel.json" "{{ cloudflare_tunnel }}"     || rc=1
     just template doctor-check "age.key"                "$SOPS_AGE_KEY_FILE"          || rc=1
     just template doctor-check "github-deploy.key"      "{{ deploy_key }}"            || rc=1
     just template doctor-check "github-push-token.txt"  "{{ push_token_file }}"       || rc=1
@@ -62,6 +61,7 @@ init:
     [ -f "{{ deploy_key }}" ]      || ssh-keygen -t ed25519 -C "deploy-key" -f "{{ deploy_key }}" -q -P ""
     [ -f "{{ push_token_file }}" ] || openssl rand -hex 16 > "{{ push_token_file }}"
 
+    [ -f "{{ cloudflare_tunnel }}" ] || echo '{"TunnelID":"","AccountTag":"","TunnelSecret":""}' > "{{ cloudflare_tunnel }}"
 [doc('Remove rendered files (bootstrap/, kubernetes/, capmox/, .sops.yaml)')]
 [group('template')]
 [confirm("Remove all templated files and directories — continue? [y/N]")]
@@ -78,7 +78,6 @@ configure-preconditions:
     test -f "$SOPS_AGE_KEY_FILE" || { just log error "age.key not found — run: just init"; exit 1; }
     test -f "{{ deploy_key }}" || { just log error "github-deploy.key not found — run: just init"; exit 1; }
     test -f "{{ push_token_file }}" || { just log error "github-push-token.txt not found — run: just init"; exit 1; }
-    test -f "{{ cloudflare_tunnel }}" || { just log error "cloudflare-tunnel.json not found — see README"; exit 1; }
 
 [private]
 [no-exit-message]
@@ -94,19 +93,28 @@ doctor-check label path:
 [private]
 [script]
 encrypt-secrets:
-    find "{{ bootstrap_dir }}" "{{ kubernetes_dir }}" "{{ capmox_dir }}" -type f -name '*.sops.*' -print0 \
-        | while IFS= read -r -d '' f; do
-            if [ "$(sops filestatus "$f" | jq '.encrypted')" = "false" ]; then
-                sops --encrypt --in-place "$f"
-            fi
-        done
+    # First render .sops.yaml from template
+    if [ -f "{{ justfile_dir() }}/.sops.yaml.j2" ]; then
+        mv "{{ justfile_dir() }}/.sops.yaml.j2" "{{ justfile_dir() }}/.sops.yaml"
+    fi
+    # Find and encrypt all .sops.* files in existing directories
+    for dir in "{{ bootstrap_dir }}" "{{ kubernetes_dir }}" "{{ capmox_dir }}"; do
+        if [ -d "$dir" ]; then
+            find "$dir" -type f -name '*.sops.*' -print0 \
+                | while IFS= read -r -d '' f; do
+                    if [ "$(sops filestatus "$f" | jq '.encrypted')" = "false" ]; then
+                        sops --encrypt --in-place "$f"
+                    fi
+                done
+        fi
+    done
 
 [private]
 render:
     test -f "{{ schema_file }}"
     test -f "{{ template_dir }}/scripts/plugin.py"
     test -f "{{ makejinja_config }}"
-    PYTHONDONTWRITEBYTECODE=1 makejinja
+    PYTHONDONTWRITEBYTECODE=1 makejinja --input "{{ template_dir }}/config" --output "{{ justfile_dir() }}"
 
 [private]
 [script]
